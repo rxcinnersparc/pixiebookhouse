@@ -170,62 +170,136 @@
     <iframe id="gas-iframe" title="Pixie Bookhouse web application" src="about:blank" allow="geolocation; clipboard-read; clipboard-write"></iframe>
 
     <script>
-        // Pixie Bookhouse Google Apps Script Web App URL
+        // ============================================================
+        // Pixie Bookhouse — Vercel wrapper
+        //
+        // This file is the TOP-LEVEL page on Vercel. It embeds the
+        // Apps Script web app in an iframe and owns the browser URL.
+        //
+        // Responsibilities:
+        //   1. Read the incoming ?page=... on first load and forward
+        //      it into the iframe's src so the embedded app can
+        //      route on boot.
+        //   2. Listen for `pixie:navigate` messages from the iframe
+        //      and update the top-level URL via history.pushState —
+        //      instant, no reload.
+        //   3. Listen for browser back/forward (popstate) and tell
+        //      the iframe to re-route internally.
+        //
+        // The GAS side sends messages of shape:
+        //   { type: 'pixie:navigate', page: 'about', title: '...', replace: false }
+        //   { type: 'pixie:setTitle', title: '...' }
+        //   { type: 'pixie:ready' }
+        // And receives:
+        //   { type: 'pixie:popstate', page: 'about' }
+        // ============================================================
+
         const GAS_WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbwV1CyusD_p5_UWcejTOQLpSkqIQzDEXF--YUCBaTA1W5LxUCWzvnf-Zvtbmm-UR1FV/exec';
 
         const iframe = document.getElementById('gas-iframe');
 
-        // Build the full URL with preserved query parameters.
-        // The hash is intentionally NOT forwarded — the embedded Apps Script
-        // app reads its own hash via google.script.url, so passing it through
-        // the parent URL only creates duplicated history entries.
+        // ------------------------------------------------------------
+        // Build the iframe src, preserving incoming ?page= (and any
+        // other query params) so the embedded app can route on boot.
+        // ------------------------------------------------------------
         function buildIframeUrl() {
             let url = GAS_WEBAPP_URL;
-
             const params = new URLSearchParams(window.location.search);
-            if (params.toString()) {
-                url += '?' + params.toString();
-            }
-
+            const qs = params.toString();
+            if (qs) url += '?' + qs;
             return url;
         }
 
         const iframeUrl = buildIframeUrl();
         iframe.src = iframeUrl;
 
-        // Bridge postMessage from the embedded app back to the wrapper so
-        // the browser title bar and history reflect the current view.
-        window.addEventListener('message', function(event) {
-            if (event.origin !== 'https://script.google.com') return;
+        // ------------------------------------------------------------
+        // Accept postMessages only from Google hosts. The GAS app is
+        // served from script.google.com, and its inner sandboxed
+        // frame lives on *.googleusercontent.com — so match both.
+        // ------------------------------------------------------------
+        function isTrustedOrigin(origin) {
+            if (!origin) return false;
+            return origin === 'https://script.google.com' ||
+                   origin === 'https://script.googleusercontent.com' ||
+                   origin.indexOf('.googleusercontent.com') !== -1 ||
+                   origin.indexOf('.google.com') !== -1;
+        }
 
-            if (event.data && event.data.type) {
-                switch (event.data.type) {
-                    case 'navigate':
-                        if (event.data.url && event.data.url !== window.location.pathname) {
-                            history.pushState(null, '', event.data.url);
-                        }
-                        break;
-                    case 'setTitle':
-                        if (event.data.title) {
-                            document.title = event.data.title;
-                        }
-                        break;
-                    case 'ready':
-                        console.log('Pixie Bookhouse app is ready');
-                        break;
+        // ------------------------------------------------------------
+        // Messages coming FROM the embedded GAS app.
+        // ------------------------------------------------------------
+        window.addEventListener('message', function (event) {
+            if (!isTrustedOrigin(event.origin)) return;
+
+            const data = event.data;
+            if (!data || !data.type) return;
+
+            if (data.type === 'pixie:navigate') {
+                const page = (data.page || '').toString();
+
+                const url = new URL(window.location.href);
+                if (page && page !== 'home') {
+                    url.searchParams.set('page', page);
+                } else {
+                    url.searchParams.delete('page');
                 }
+
+                // Only touch history if the URL actually changed —
+                // avoids stacking duplicate entries on every click.
+                if (url.toString() !== window.location.href) {
+                    if (data.replace) {
+                        window.history.replaceState({ page: page }, '', url);
+                    } else {
+                        window.history.pushState({ page: page }, '', url);
+                    }
+                }
+
+                if (data.title) {
+                    document.title = data.title;
+                }
+                return;
+            }
+
+            if (data.type === 'pixie:setTitle') {
+                if (data.title) document.title = data.title;
+                return;
+            }
+
+            if (data.type === 'pixie:ready') {
+                console.log('Pixie Bookhouse app is ready');
+                return;
+            }
+
+            // ---- Backwards compatibility with the old protocol ----
+            switch (data.type) {
+                case 'navigate':
+                    if (data.url && data.url !== window.location.pathname) {
+                        window.history.pushState(null, '', data.url);
+                    }
+                    break;
+                case 'setTitle':
+                    if (data.title) document.title = data.title;
+                    break;
+                case 'ready':
+                    console.log('Pixie Bookhouse app is ready');
+                    break;
             }
         });
 
-        // Forward browser back/forward to the embedded app
-        window.addEventListener('popstate', function() {
-            iframe.contentWindow.postMessage({
-                type: 'popstate',
-                url: window.location.href
-            }, '*');
+        // ------------------------------------------------------------
+        // Browser back / forward → tell the iframe to re-route.
+        // The iframe navigates internally with pushHistory=false so
+        // it doesn't bounce the change back and cause a loop.
+        // ------------------------------------------------------------
+        window.addEventListener('popstate', function () {
+            const page = new URLSearchParams(window.location.search).get('page') || 'home';
+            iframe.contentWindow.postMessage(
+                { type: 'pixie:popstate', page: page },
+                '*'
+            );
         });
 
-        // Log successful setup (for debugging)
         console.log('Pixie Bookhouse wrapper loaded. Iframe URL:', iframeUrl);
     </script>
 </body>
