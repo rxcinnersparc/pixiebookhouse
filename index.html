@@ -235,7 +235,19 @@
             // here with a valid origin, so we still filter, but we no
             // longer drop "null" origins from sandboxed frames.
             if (event.source === window) return; // ignore our own posts
-            if (!isTrustedOrigin(event.origin)) return;
+
+            // Debug: log every message we receive so we can trace
+            // whether the GAS iframe's postMessage actually reaches us.
+            console.log('[Vercel wrapper] message received', {
+                origin: event.origin,
+                type:   event.data && event.data.type,
+                page:   event.data && event.data.page
+            });
+
+            if (!isTrustedOrigin(event.origin)) {
+                console.warn('[Vercel wrapper] rejected origin:', event.origin);
+                return;
+            }
 
             const data = event.data;
             if (!data || !data.type) return;
