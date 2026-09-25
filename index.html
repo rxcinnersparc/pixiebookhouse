@@ -1,1 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>Pixie Bookhouse | Read what you love</title>
+    <meta name="description" content="Visit the official website of Pixie Bookhouse — your go-to online secondhand bookstore. Transparent book condition, reasonable pricing.">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://pixiebookhouse.vercel.app/">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="Pixie Bookhouse">
+    <meta property="og:title" content="Pixie Bookhouse | Read what you love">
+    <meta property="og:description" content="Your go-to online secondhand bookstore. Transparent book condition, reasonable pricing.">
+    <meta property="og:url" content="https://pixiebookhouse.vercel.app/">
+    <meta property="og:image" content="https://pixiebookhouse.vercel.app/pixiebookhouse-logo-white.png">
+    <meta name="twitter:card" content="summary_large_image">
 
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-9YZJ3Y1VWS"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+
+      gtag('config', 'G-9YZJ3Y1VWS');
+    </script>
+
+    <!-- JSON-LD structured data for SEO, AEO, and entity understanding -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://pixiebookhouse.vercel.app/#organization",
+          "name": "Pixie Bookhouse",
+          "url": "https://pixiebookhouse.vercel.app/"
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://pixiebookhouse.vercel.app/#website",
+          "url": "https://pixiebookhouse.vercel.app/",
+          "name": "Pixie Bookhouse Official Website",
+          "publisher": {
+            "@id": "https://pixiebookhouse.vercel.app/#organization"
+          },
+          "inLanguage": "en"
+        },
+        {
+          "@type": "WebPage",
+          "@id": "https://pixiebookhouse.vercel.app/#webpage",
+          "url": "https://pixiebookhouse.vercel.app/",
+          "name": "Pixie Bookhouse Official Website",
+          "isPartOf": {
+            "@id": "https://pixiebookhouse.vercel.app/#website"
+          },
+          "about": {
+            "@id": "https://pixiebookhouse.vercel.app/#organization"
+          },
+          "inLanguage": "en"
+        }
+      ]
+    }
+    </script>
+
+    <!-- Pixie Bookhouse favicon -->
+    <link rel="icon" href="/favicon.ico" sizes="any">
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon.png">
+    <link rel="icon" type="image/png" sizes="512x512" href="/pixiebookhouse-logo-white.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body, html {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: #f4f5fb;
+            font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        }
+
+        #gas-iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+            display: block;
+        }
+
+        /* Crawlable text that does not change the full-screen app layout */
+        .seo-content {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
+        }
+    </style>
+</head>
+<body>
+    <section class="seo-content" aria-label="About Pixie Bookhouse">
+        <h1>Pixie Bookhouse</h1>
+        <p>Visit the official website of Pixie Bookhouse — your go-to online secondhand bookstore. Transparent book condition, reasonable pricing. Read what you love.</p>
+    </section>
+
+    <iframe id="gas-iframe" title="Pixie Bookhouse web application" src="about:blank" allow="geolocation; clipboard-read; clipboard-write"></iframe>
+
+    <script>
+        // Pixie Bookhouse Google Apps Script Web App URL
+        const GAS_WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbwV1CyusD_p5_UWcejTOQLpSkqIQzDEXF--YUCBaTA1W5LxUCWzvnf-Zvtbmm-UR1FV/exec';
+
+        const iframe = document.getElementById('gas-iframe');
+
+        // Build the full URL with preserved query parameters.
+        // The hash is intentionally NOT forwarded — the embedded Apps Script
+        // app reads its own hash via google.script.url, so passing it through
+        // the parent URL only creates duplicated history entries.
+        function buildIframeUrl() {
+            let url = GAS_WEBAPP_URL;
+
+            const params = new URLSearchParams(window.location.search);
+            if (params.toString()) {
+                url += '?' + params.toString();
+            }
+
+            return url;
+        }
+
+        const iframeUrl = buildIframeUrl();
+        iframe.src = iframeUrl;
+
+        // Bridge postMessage from the embedded app back to the wrapper so
+        // the browser title bar and history reflect the current view.
+        window.addEventListener('message', function(event) {
+            if (event.origin !== 'https://script.google.com') return;
+
+            if (event.data && event.data.type) {
+                switch (event.data.type) {
+                    case 'navigate':
+                        if (event.data.url && event.data.url !== window.location.pathname) {
+                            history.pushState(null, '', event.data.url);
+                        }
+                        break;
+                    case 'setTitle':
+                        if (event.data.title) {
+                            document.title = event.data.title;
+                        }
+                        break;
+                    case 'ready':
+                        console.log('Pixie Bookhouse app is ready');
+                        break;
+                }
+            }
+        });
+
+        // Forward browser back/forward to the embedded app
+        window.addEventListener('popstate', function() {
+            iframe.contentWindow.postMessage({
+                type: 'popstate',
+                url: window.location.href
+            }, '*');
+        });
+
+        // Log successful setup (for debugging)
+        console.log('Pixie Bookhouse wrapper loaded. Iframe URL:', iframeUrl);
+    </script>
+</body>
+</html>
