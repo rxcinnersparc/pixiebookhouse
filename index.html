@@ -219,7 +219,7 @@
         // frame lives on *.googleusercontent.com — so match both.
         // ------------------------------------------------------------
         function isTrustedOrigin(origin) {
-            if (!origin) return false;
+            if (!origin || origin === 'null') return true; // sandboxed iframes sometimes post null
             return origin === 'https://script.google.com' ||
                    origin === 'https://script.googleusercontent.com' ||
                    origin.indexOf('.googleusercontent.com') !== -1 ||
@@ -230,6 +230,11 @@
         // Messages coming FROM the embedded GAS app.
         // ------------------------------------------------------------
         window.addEventListener('message', function (event) {
+            // Only the innermost GAS frame actually runs the app code.
+            // Messages relayed up through the GAS wrapper also arrive
+            // here with a valid origin, so we still filter, but we no
+            // longer drop "null" origins from sandboxed frames.
+            if (event.source === window) return; // ignore our own posts
             if (!isTrustedOrigin(event.origin)) return;
 
             const data = event.data;
@@ -268,6 +273,18 @@
 
             if (data.type === 'pixie:ready') {
                 console.log('Pixie Bookhouse app is ready');
+
+                // On first load, tell the iframe which page it should
+                // be on — in case the iframe src dropped ?page= along
+                // the way (some hosting setups strip query strings
+                // when proxying into script.google.com).
+                const initial = new URLSearchParams(window.location.search).get('page') || 'home';
+                try {
+                    iframe.contentWindow.postMessage(
+                        { type: 'pixie:popstate', page: initial },
+                        '*'
+                    );
+                } catch (e) {}
                 return;
             }
 
@@ -294,10 +311,22 @@
         // ------------------------------------------------------------
         window.addEventListener('popstate', function () {
             const page = new URLSearchParams(window.location.search).get('page') || 'home';
-            iframe.contentWindow.postMessage(
-                { type: 'pixie:popstate', page: page },
-                '*'
-            );
+
+            // Broadcast down through every nested frame level so the
+            // innermost sandboxed GAS frame receives it. Each GAS frame
+            // also relays one level deeper (see GAS setupSmoothScroll),
+            // so this simple fan-out is enough.
+            function relay(win, depth) {
+                if (!win || depth > 6) return;
+                try { win.postMessage({ type: 'pixie:popstate', page: page }, '*'); } catch (e) {}
+                try {
+                    for (let i = 0; i < win.frames.length; i++) {
+                        relay(win.frames[i], depth + 1);
+                    }
+                } catch (e) {}
+            }
+
+            relay(iframe.contentWindow, 0);
         });
 
         console.log('Pixie Bookhouse wrapper loaded. Iframe URL:', iframeUrl);
