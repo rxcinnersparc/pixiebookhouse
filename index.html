@@ -171,27 +171,32 @@
 
     <script>
         // ============================================================
-        // Pixie Bookhouse — Vercel wrapper
+        // Pixie Bookhouse — Vercel wrapper (CLEAN URLS)
         //
-        // This file is the TOP-LEVEL page on Vercel. It embeds the
-        // Apps Script web app in an iframe and owns the browser URL.
+        // Public URL forms on Vercel:
+        //   /                        → home
+        //   /about                   → about section
+        //   /titles                  → Pixie's Picks
+        //   /new-titles              → New Titles
+        //   /clearance-sale          → Clearance Sale
+        //   /blogs                   → Pixie's Corner grid
+        //   /blogs/blog-title-here   → single blog post  ← NEW
+        //   /bookmark                → Bookmark
+        //   /donate                  → Donate
+        //   /connect                 → Connect
         //
-        // Responsibilities:
-        //   1. Read the incoming ?page=... on first load and forward
-        //      it into the iframe's src so the embedded app can
-        //      route on boot.
-        //   2. Listen for `pixie:navigate` messages from the iframe
-        //      and update the top-level URL via history.pushState —
-        //      instant, no reload.
-        //   3. Listen for browser back/forward (popstate) and tell
-        //      the iframe to re-route internally.
+        // The embedded GAS app still speaks ?page= internally
+        // (its sandbox can't produce clean paths). This wrapper
+        // translates between the two worlds:
         //
-        // The GAS side sends messages of shape:
-        //   { type: 'pixie:navigate', page: 'about', title: '...', replace: false }
-        //   { type: 'pixie:setTitle', title: '...' }
-        //   { type: 'pixie:ready' }
-        // And receives:
-        //   { type: 'pixie:popstate', page: 'about' }
+        //   IN  : pathname  →  ?page=…       (iframe src on first load)
+        //   OUT : pixie:navigate  →  pushState('/clean/path')
+        //   BACK: popstate        →  pixie:popstate { page }
+        //
+        // For blogs we use a genuine 2-segment path:
+        //   GAS page value  : "blogs-<slug>"
+        //   Public URL      : "/blogs/<slug>"
+        // and translate both directions here. GAS sees no change.
         // ============================================================
 
         const GAS_WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbwV1CyusD_p5_UWcejTOQLpSkqIQzDEXF--YUCBaTA1W5LxUCWzvnf-Zvtbmm-UR1FV/exec';
@@ -199,16 +204,82 @@
         const iframe = document.getElementById('gas-iframe');
 
         // ------------------------------------------------------------
-        // Build the iframe src, preserving incoming ?page= (and any
-        // other query params) so the embedded app can route on boot.
+        // Translate a public pathname into the GAS-internal page value.
+        //
+        //   "/"                        → "home"
+        //   "/about"                   → "about"
+        //   "/blogs"                   → "blogs"
+        //   "/blogs/the-midnight-..."  → "blogs-the-midnight-..."
+        //   "/anything-else"           → "anything-else"
+        // ------------------------------------------------------------
+        function pathnameToPage(pathname) {
+            var p = (pathname || '/').replace(/^\/+|\/+$/g, ''); // strip leading/trailing slashes
+            if (!p || p === 'index.html') return 'home';
+
+            // Blogs: /blogs/<slug>  →  blogs-<slug>
+            if (p.indexOf('blogs/') === 0) {
+                var slug = p.slice('blogs/'.length);
+                if (!slug) return 'blogs';
+                return 'blogs-' + slug;
+            }
+
+            return p;
+        }
+
+        // ------------------------------------------------------------
+        // Translate a GAS page value into the public clean path.
+        //
+        //   "home"                   → "/"
+        //   "about"                  → "/about"
+        //   "blogs"                  → "/blogs"
+        //   "blogs-the-midnight-..." → "/blogs/the-midnight-..."
+        // ------------------------------------------------------------
+        function pageToPathname(page) {
+            var p = (page || '').toString().trim();
+            if (!p || p === 'home') return '/';
+
+            // Blogs slug: blogs-<slug>  →  /blogs/<slug>
+            if (p.indexOf('blogs-') === 0) {
+                var slug = p.slice('blogs-'.length);
+                if (slug) return '/blogs/' + slug;
+            }
+
+            return '/' + p;
+        }
+
+        // ------------------------------------------------------------
+        // Build the iframe src from the current window.location.
+        //
+        // GAS always receives ?page=<value> in the iframe src, because
+        // that's the only format google.script.url.getLocation() can read.
         // ------------------------------------------------------------
         function buildIframeUrl() {
-            let url = GAS_WEBAPP_URL;
-            const params = new URLSearchParams(window.location.search);
-            const qs = params.toString();
-            if (qs) url += '?' + qs;
-            return url;
+            var page = pathnameToPage(window.location.pathname);
+            var url = new URL(GAS_WEBAPP_URL);
+            if (page && page !== 'home') url.searchParams.set('page', page);
+            return url.toString();
         }
+
+        // ------------------------------------------------------------
+        // Legacy redirect: if someone lands on "/?page=about" (old
+        // bookmark, old share link), rewrite to "/about" so the URL
+        // bar matches the new canonical form. Uses replaceState so
+        // no extra history entry is created.
+        // ------------------------------------------------------------
+        (function migrateLegacyQueryString() {
+            try {
+                var params = new URLSearchParams(window.location.search);
+                var legacy = params.get('page');
+                if (!legacy) return;
+
+                var cleanPath = pageToPathname(legacy);
+                params.delete('page');
+                var tail = params.toString();
+                var newUrl = cleanPath + (tail ? ('?' + tail) : '');
+
+                window.history.replaceState({ page: legacy }, '', newUrl);
+            } catch (e) { /* ignore */ }
+        })();
 
         const iframeUrl = buildIframeUrl();
         iframe.src = iframeUrl;
@@ -253,28 +324,28 @@
             if (!data || !data.type) return;
 
             if (data.type === 'pixie:navigate') {
-                const page = (data.page || '').toString();
+                const page = (data.page || 'home').toString();
 
+                // page → clean path, no query string
+                const newPath = pageToPathname(page);
+
+                // Preserve unrelated query params (utm_*, etc.)
                 const url = new URL(window.location.href);
-                if (page && page !== 'home') {
-                    url.searchParams.set('page', page);
-                } else {
-                    url.searchParams.delete('page');
-                }
+                url.pathname = newPath;
+                url.searchParams.delete('page');
 
-                // Only touch history if the URL actually changed —
-                // avoids stacking duplicate entries on every click.
-                if (url.toString() !== window.location.href) {
+                const target = url.pathname + (url.search || '') + url.hash;
+
+                // Only touch history if the URL actually changed.
+                if (target !== (window.location.pathname + window.location.search + window.location.hash)) {
                     if (data.replace) {
-                        window.history.replaceState({ page: page }, '', url);
+                        window.history.replaceState({ page: page }, '', target);
                     } else {
-                        window.history.pushState({ page: page }, '', url);
+                        window.history.pushState({ page: page }, '', target);
                     }
                 }
 
-                if (data.title) {
-                    document.title = data.title;
-                }
+                if (data.title) document.title = data.title;
                 return;
             }
 
@@ -286,11 +357,9 @@
             if (data.type === 'pixie:ready') {
                 console.log('Pixie Bookhouse app is ready');
 
-                // On first load, tell the iframe which page it should
-                // be on — in case the iframe src dropped ?page= along
-                // the way (some hosting setups strip query strings
-                // when proxying into script.google.com).
-                const initial = new URLSearchParams(window.location.search).get('page') || 'home';
+                // On first load, tell the iframe which page to be on.
+                // Read from the *clean* pathname, not a query string.
+                const initial = pathnameToPage(window.location.pathname);
                 try {
                     iframe.contentWindow.postMessage(
                         { type: 'pixie:popstate', page: initial },
@@ -322,7 +391,8 @@
         // it doesn't bounce the change back and cause a loop.
         // ------------------------------------------------------------
         window.addEventListener('popstate', function () {
-            const page = new URLSearchParams(window.location.search).get('page') || 'home';
+            // Read from the *clean* pathname, not a query string.
+            const page = pathnameToPage(window.location.pathname);
 
             // Broadcast down through every nested frame level so the
             // innermost sandboxed GAS frame receives it. Each GAS frame
