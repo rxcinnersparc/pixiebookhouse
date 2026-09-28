@@ -1,8 +1,5 @@
 {
   "rewrites": [
-    {
-      "source": "/(.*)",
-      "destination": "/index.html"
-    }
+    { "source": "/((?!favicon|apple-touch-icon|pixiebookhouse|robots|sitemap).*)", "destination": "/index.html" }
   ]
 }
