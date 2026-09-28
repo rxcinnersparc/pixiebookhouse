@@ -357,9 +357,18 @@
             if (data.type === 'pixie:ready') {
                 console.log('Pixie Bookhouse app is ready');
 
-                // On first load, tell the iframe which page to be on.
-                // Read from the *clean* pathname, not a query string.
-                const initial = pathnameToPage(window.location.pathname);
+                // Mark the iframe as ready so future popstate events
+                // are delivered immediately.
+                iframeReady = true;
+
+                // Prefer the buffered page (set by a popstate that
+                // arrived before ready) over the current URL — the
+                // buffered value is what the user actually asked for.
+                const initial = pendingPage !== null
+                    ? pendingPage
+                    : pathnameToPage(window.location.pathname);
+                pendingPage = null;
+
                 try {
                     iframe.contentWindow.postMessage(
                         { type: 'pixie:popstate', page: initial },
@@ -390,9 +399,23 @@
         // The iframe navigates internally with pushHistory=false so
         // it doesn't bounce the change back and cause a loop.
         // ------------------------------------------------------------
+        // ── Track whether the iframe is ready to receive routing messages ──
+        // Messages sent before pixie:ready are buffered and replayed.
+        let iframeReady = false;
+        let pendingPage = null;
+
         window.addEventListener('popstate', function () {
             // Read from the *clean* pathname, not a query string.
             const page = pathnameToPage(window.location.pathname);
+
+            // If the iframe hasn't signalled ready yet, buffer this
+            // and replay it when it does. Otherwise the message is
+            // dropped on the floor and the iframe boots to the wrong
+            // section (or to a blank/grey page).
+            if (!iframeReady) {
+                pendingPage = page;
+                return;
+            }
 
             // Broadcast down through every nested frame level so the
             // innermost sandboxed GAS frame receives it. Each GAS frame
