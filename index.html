@@ -365,6 +365,15 @@
                 if (target !== (window.location.pathname + window.location.search + window.location.hash)) {
                     window.history.replaceState({ page: page }, '', target);
                 }
+
+                // Mirror the iframe's title onto the top-level
+                // document so the browser tab reflects the current
+                // navbar section while scrolling. The iframe sends
+                // the already-computed title in data.title (see
+                // setupScrollSpy → broadcast in Index.html).
+                if (data.title) {
+                    document.title = data.title;
+                }
                 return;
             }
 
